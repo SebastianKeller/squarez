@@ -1,11 +1,11 @@
 const std = @import("std");
 const c = @import("c.zig");
-
 const assert = std.debug.assert;
 const panic = std.debug.panic;
 
 const grid_png_data = @embedFile("../assets/grid.png");
 const font_bmp_data = @embedFile("../assets/font.bmp");
+const player_png_data = @embedFile("../assets/player.png");
 
 pub fn main() anyerror!void {
     if (!(c.SDL_SetHintWithPriority(c.SDL_HINT_NO_SIGNAL_HANDLERS, "1", c.SDL_HintPriority.SDL_HINT_OVERRIDE) != c.SDL_bool.SDL_FALSE)) {
@@ -36,35 +36,83 @@ pub fn main() anyerror!void {
 
     const grid_texture = createTextureFromData(grid_png_data, renderer);
     const font_texture = createTextureFromData(font_bmp_data, renderer);
+    const player_texture = createTextureFromData(player_png_data, renderer);
 
-    var board = Board.create();
-    board.setValue(4, 4, 5);
+    var state = Gamestate{
+        .board = Board.create(),
+        .position = Point{ .x = 4, .y = 4 },
+    };
 
-    var player = Point{ .x = 4, .y = 4 };
-
-    while (true) {
+    mainLoop: while (true) {
         var event: c.SDL_Event = undefined;
         while (c.SDL_PollEvent(&event) != 0) {
             switch (event.@"type") {
                 c.SDL_QUIT => return,
+                c.SDL_KEYDOWN => {
+                    switch (event.key.keysym.sym) {
+                        c.SDLK_LEFT => state.movePosition(.Left),
+                        c.SDLK_RIGHT => state.movePosition(.Right),
+                        c.SDLK_UP => state.movePosition(.Up),
+                        c.SDLK_DOWN => state.movePosition(.Down),
+                        '1'...'9' => state.setValue(@intCast(u8, event.key.keysym.sym - '0')),
+                        'x' => state.setValue(null),
+                        'q' => break :mainLoop,
+                        else => {},
+                    }
+                },
+                c.SDL_MOUSEBUTTONDOWN => {
+                    if (event.button.button == c.SDL_BUTTON_LEFT) {
+                        const x = @divFloor((@intCast(u32, event.button.x) - 20), 40);
+                        const y = @divFloor((@intCast(u32, event.button.y) - 20), 40);
+
+                        if (x >= 0 and x <= 8 and y >= 0 and y <= 8) {
+                            state.setPosition(x, y);
+                        }
+                    }
+                },
                 else => {},
             }
         }
 
+        _ = c.SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
+        c.assertZero(c.SDL_RenderClear(renderer));
+
+        drawPlayerPosition(renderer, &state, player_texture);
         drawBackground(renderer, grid_texture);
-        drawNumbers(renderer, board, font_texture);
+        drawNumbers(renderer, &state, font_texture);
 
         c.SDL_RenderPresent(renderer);
         c.SDL_Delay(17 - (c.SDL_GetTicks() % 17));
     }
 }
 
-fn drawNumbers(renderer: *c.SDL_Renderer, board: Board, font: *c.SDL_Texture) void {
-    var x: usize = 0;
+fn drawPlayerPosition(
+    renderer: *c.SDL_Renderer,
+    state: *Gamestate,
+    texture: *c.SDL_Texture,
+) void {
+    const src = c.SDL_Rect{
+        .x = 0,
+        .y = 0,
+        .w = 40,
+        .h = 40,
+    };
+    const dst = c.SDL_Rect{
+        .x = @intCast(c_int, 20 + state.position.x * 40),
+        .y = @intCast(c_int, 20 + state.position.y * 40),
+        .w = 40,
+        .h = 40,
+    };
+
+    c.assertZero(c.SDL_RenderCopy(renderer, texture, &src, &dst));
+}
+
+fn drawNumbers(renderer: *c.SDL_Renderer, state: *Gamestate, font: *c.SDL_Texture) void {
+    var x: u32 = 0;
     while (x < 9) {
-        var y: usize = 0;
+        var y: u32 = 0;
         while (y < 9) {
-            var value = board.getValue(x, y);
+            var value = state.getValue(x, y);
             if (value) |v| {
                 var idx: i32 = v + 16; // font map starts with space
 
@@ -97,9 +145,6 @@ fn drawNumbers(renderer: *c.SDL_Renderer, board: Board, font: *c.SDL_Texture) vo
 }
 
 fn drawBackground(renderer: *c.SDL_Renderer, texture: *c.SDL_Texture) void {
-    _ = c.SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
-    c.assertZero(c.SDL_RenderClear(renderer));
-
     const src_rect = c.SDL_Rect{
         .x = 0,
         .y = 0,
@@ -113,6 +158,7 @@ fn drawBackground(renderer: *c.SDL_Renderer, texture: *c.SDL_Texture) void {
         .w = 360,
         .h = 360,
     };
+
     c.assertZero(c.SDL_RenderCopy(renderer, texture, &src_rect, &dst_rect));
 }
 
@@ -123,16 +169,52 @@ fn createTextureFromData(data: var, renderer: *c.SDL_Renderer) *c.SDL_Texture {
     return texture;
 }
 
+const Gamestate = struct {
+    board: Board,
+    position: Point,
+
+    const Self = @This();
+    fn movePosition(self: *Self, direction: Direction) void {
+        switch (direction) {
+            .Left => {
+                if (self.position.x > 0) self.position.x -= 1;
+            },
+            .Right => {
+                if (self.position.x < 8) self.position.x += 1;
+            },
+            .Up => {
+                if (self.position.y > 0) self.position.y -= 1;
+            },
+            .Down => {
+                if (self.position.y < 8) self.position.y += 1;
+            },
+        }
+    }
+
+    fn setPosition(self: *Self, x: u32, y: u32) void {
+        self.position.x = x;
+        self.position.y = y;
+    }
+
+    fn setValue(self: *Self, value: ?u8) void {
+        self.board.setValue(self.position.x, self.position.y, value);
+    }
+
+    fn getValue(self: Self, x: u32, y: u32) ?u8 {
+        return self.board.getValue(x, y);
+    }
+};
+
 const Board = struct {
     values: [81]?u8,
 
     const Self = @This();
 
-    pub fn getValue(self: Self, x: usize, y: usize) ?u8 {
+    pub fn getValue(self: Self, x: u32, y: u32) ?u8 {
         return self.values[y * 9 + x];
     }
 
-    pub fn setValue(self: *Self, x: usize, y: usize, value: ?u8) void {
+    pub fn setValue(self: *Self, x: u32, y: u32, value: ?u8) void {
         self.values[y * 9 + x] = value;
     }
 
@@ -144,6 +226,10 @@ const Board = struct {
 };
 
 const Point = struct {
-    x: u8,
-    y: u8,
+    x: u32,
+    y: u32,
+};
+
+const Direction = enum {
+    Up, Down, Left, Right
 };
