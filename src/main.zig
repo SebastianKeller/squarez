@@ -162,7 +162,7 @@ fn drawBackground(renderer: *c.SDL_Renderer, texture: *c.SDL_Texture) void {
     c.assertZero(c.SDL_RenderCopy(renderer, texture, &src_rect, &dst_rect));
 }
 
-fn createTextureFromData(data: var, renderer: *c.SDL_Renderer) *c.SDL_Texture {
+fn createTextureFromData(data: anytype, renderer: *c.SDL_Renderer) *c.SDL_Texture {
     const rwops = c.SDL_RWFromConstMem(data, data.len).?;
     const surface = c.IMG_Load_RW(rwops, 0) orelse panic("unable to load image", .{});
     const texture = c.SDL_CreateTextureFromSurface(renderer, surface) orelse panic("unable to create texture", .{});
