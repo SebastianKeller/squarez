@@ -7,5 +7,5 @@ const std = @import("std");
 
 pub fn assertZero(ret: c_int) void {
     if (ret == 0) return;
-    std.debug.panic("sdl function returned an error: {c}", .{SDL_GetError()});
+    std.debug.panic("sdl function returned an error: {*}", .{SDL_GetError()});
 }

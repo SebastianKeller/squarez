@@ -13,7 +13,7 @@ pub fn main() anyerror!void {
     }
 
     if (c.SDL_Init(c.SDL_INIT_VIDEO) != 0) {
-        panic("SDL_Init failed: {c}\n", .{c.SDL_GetError()});
+        panic("SDL_Init failed: {s}\n", .{c.SDL_GetError()});
     }
     defer c.SDL_Quit();
 
@@ -25,12 +25,12 @@ pub fn main() anyerror!void {
         400,
         0,
     ) orelse {
-        panic("SDL_CreateWindow failed: {c}\n", .{c.SDL_GetError()});
+        panic("SDL_CreateWindow failed: {*}\n", .{c.SDL_GetError()});
     };
     defer c.SDL_DestroyWindow(screen);
 
     const renderer = c.SDL_CreateRenderer(screen, -1, 0) orelse {
-        panic("SDL_CreateRenderer failed: {c}\n", .{c.SDL_GetError()});
+        panic("SDL_CreateRenderer failed: {*}\n", .{c.SDL_GetError()});
     };
     defer c.SDL_DestroyRenderer(renderer);
 
@@ -66,7 +66,8 @@ pub fn main() anyerror!void {
                         const y = @divFloor((@intCast(u32, event.button.y) - 20), 40);
 
                         if (x >= 0 and x <= 8 and y >= 0 and y <= 8) {
-                            state.setPosition(x, y);
+                            state.position.x = x;
+                            state.position.y = y;
                         }
                     }
                 },
@@ -191,11 +192,6 @@ const Gamestate = struct {
         }
     }
 
-    fn setPosition(self: *Self, x: u32, y: u32) void {
-        self.position.x = x;
-        self.position.y = y;
-    }
-
     fn setValue(self: *Self, value: ?u8) void {
         self.board.setValue(self.position.x, self.position.y, value);
     }
@@ -230,6 +226,4 @@ const Point = struct {
     y: u32,
 };
 
-const Direction = enum {
-    Up, Down, Left, Right
-};
+const Direction = enum { Up, Down, Left, Right };
